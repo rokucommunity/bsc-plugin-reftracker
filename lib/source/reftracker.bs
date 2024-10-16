@@ -1,0 +1,5 @@
+namespace reftracker
+    ' This is a generic function injected into every component as a callfunc, to be a single point of contact for all commands.
+    function execute()
+    end function
+end namespace
