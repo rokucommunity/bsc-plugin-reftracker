@@ -1,5 +1,5 @@
 import "pkg:/source/reftrackerLib.bs"
-import "pkg:/source/roku_modules/promises/promises.brs"
+import "pkg:/source/roku_modules/reftracker_promises/promises.brs"
 
 ' typecast m as ReftrackerM
 interface ReftrackerM
@@ -25,6 +25,7 @@ function init()
     m.top.runId = reftracker.internal.getRandomUUID()
 end function
 
+'@public
 function discover(_ = invalid)
     'seed the list of nodes with all roots (should be a good starting point)
     for each root in m.top.getRoots() as roSGnode[]
@@ -32,9 +33,32 @@ function discover(_ = invalid)
     end for
 
     'process the nodes one-by-one
-    return promises.onThen(processNodes(), function(result)
+    return reftracker.promises.onThen(processNodes(), function(result)
         printNodes()
     end function)
+end function
+
+interface GetNodesByIdOptions
+    id as string
+end interface
+
+'@public
+function getNodesById(options as GetNodesByIdOptions)
+    id = options.id
+    results = []
+    ' for each node in m.allNodes
+    '     if node.id <> id
+    '         continue for
+    '     end if
+    '     reftrackerId = reftracker.internal.getReftrackerId(node)
+    '     'build a list of keypaths for this node
+    '     results.push({
+    '         id: id,
+    '         node: node,
+    '         keypaths: m.keypathsByNodeReftrackerId[reftrackerId],
+    '     })
+    ' end for
+    return results
 end function
 
 function printNodes()
@@ -43,8 +67,10 @@ end function
 
 'Register a reference to a node so we can process it later. This
 function registerNodeRef(parentKeypath as string, key as string, node as roSGNode) as void
-    'skip this node if it's a reftracker property
-    if reftracker.internal.isReftrackerProperty(key)
+    subtype = node.subtype()
+
+    'skip this node if it's a reftracker property, or one of the internal reftracker nodes (promise, reftracker itself)
+    if reftracker.internal.isReftrackerProperty(key) or subtype = "reftracker_promises_Promise" or subtype = "Reftracker"
         return
     end if
     reftrackerId = reftracker.internal.getReftrackerId(node)
@@ -75,7 +101,7 @@ function processNodes()
     'if we have no more nodes, we are done!
     if m.nodeQueue.count() = 0
         reftracker.internal.writeLog("All nodes have been processed. Exiting node process loop")
-        return promises.resolve(invalid)
+        return reftracker.promises.resolve(invalid)
     end if
 
     queueItem = m.nodeQueue.pop() as NodeQueueItem
@@ -83,7 +109,7 @@ function processNodes()
     reftracker.internal.writeLog("processing node", queueItem.keypath, queueItem.node.subtype())
 
     'if this node supports reftracker functionality, process the node's internal `m`
-    return promises.chain(promises.resolve(true), queueItem).then(function(result, queueItem as NodeQueueItem)
+    return reftracker.promises.chain(reftracker.promises.resolve(true), queueItem).then(function(result, queueItem as NodeQueueItem)
         reftracker.internal.writeLog("processing node's internal m properties", queueItem.keypath, queueItem.node.subtype())
         promise = queueItem.node@.reftracker_internal_execute({
             command: "discover",

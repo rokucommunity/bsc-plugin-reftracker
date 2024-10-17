@@ -1,4 +1,4 @@
-import "pkg:/source/roku_modules/promises/promises.brs"
+import "pkg:/source/roku_modules/reftracker_promises/promises.brs"
 
 const MAX_WORK_QUEUE_DURATION = 5000000000000
 ' typecast m as mm
@@ -13,14 +13,21 @@ end interface
 
 namespace reftracker
 
-    ' Find all references to a SceneGraph node by its ID
-    function findNodeById(id as string)
+    ' Find all references to a SceneGraph node by its ID. Since multiple nodes can have the same ID, this function returns an array of results,
+    ' where each entry includes all results for a specific node having that ID
+    function findNodeRefsById(id as string)
         'build the reftracker
         tracker = createObject("roSGNode", "Reftracker")
         'store a reference to it so it doesn't get lost
         reftracker.internal.registerReftracker(tracker)
+
         'run it
-        return tracker@.discover()
+        discoverPromise = tracker@.discover()
+
+        return reftracker.promises.onThen(discoverPromise, function(result, tracker)
+            'return all nodes with the given id
+            return tracker@.findNodeRefsById(id)
+        end function, tracker)
     end function
 end namespace
 
@@ -34,7 +41,7 @@ namespace reftracker.internal
             registerWorkItem(options.keypath, "m", m)
             return processWorkItems(options)
         else
-            return promises.reject({
+            return reftracker.promises.reject({
                 message: "Unknown command"
             })
         end if
@@ -66,7 +73,7 @@ namespace reftracker.internal
         end if
     end function
 
-    function processWorkItems(options as reftracker.internal.ProcessOptions) as roSGNodepromises_Promise
+    function processWorkItems(options as reftracker.internal.ProcessOptions) as roSGNodereftracker_promises_Promise
         startTime = createObject("roTimeSpan")
 
         workQueue = getWorkQueue()
@@ -127,11 +134,11 @@ namespace reftracker.internal
         if workQueue[0] = invalid
             writeLog("work queue is complete", options.keypath)
             'TODO clean up
-            return promises.resolve(true)
+            return reftracker.promises.resolve(true)
         end if
 
         'small delay, then process work again
-        return promises.chain(reftracker.internal.delay(.01), options).then(function(result, options)
+        return reftracker.promises.chain(reftracker.internal.delay(.01), options).then(function(result, options)
             'process work items again
             return processWorkItems(options)
         end function).toPromise()
@@ -203,13 +210,13 @@ namespace reftracker.internal
     end function
 
     ' Get a promise that resolves after a given duration
-    sub delay(duration = 0.0001 as float) as roSGNodepromises_Promise
+    sub delay(duration = 0.0001 as float) as roSGNodereftracker_promises_Promise
         timer = createObject("roSGNode", "Timer")
         timer.duration = duration
         timer.repeat = false
         timer.id = "___reftracker_delay_" + getRandomUUID()
 
-        promise = promises.create()
+        promise = reftracker.promises.create()
 
         m[timer.id] = {
             timer: timer
@@ -220,7 +227,7 @@ namespace reftracker.internal
             delayId = event.getNode()
             options = m[delayId]
             promise = options.promise
-            promises.resolve(promise, invalid)
+            reftracker.promises.resolve(promise, invalid)
             m[delayId].timer.unobserveFieldScoped("fire")
             m.delete(delayId)
         end sub).toStr().mid(10))
@@ -256,7 +263,7 @@ namespace reftracker.internal
 
     'All reftracker properties are prefixed with ___reftracker_ , so this method can be used to filter them out
     function isReftrackerProperty(key as dynamic)
-        return isString(key) and key.left(14) = "___reftracker_"
+        return (isString(key) and key.left(14) = "___reftracker_")
     end function
 
     function writeLog(message as string, keypath = "" as string, typeInfo = "" as string)
@@ -292,10 +299,10 @@ namespace reftracker.internal
     end function
 
     function isNonEmptyAA(value as dynamic) as boolean
-		return type(value) = "roAssociativeArray" and not value.isEmpty()
-	end function
+        return type(value) = "roAssociativeArray" and not value.isEmpty()
+    end function
 
     function isArray(value as dynamic) as boolean
-		return type(value) = "roArray"
-	end function
+        return type(value) = "roArray"
+    end function
 end namespace

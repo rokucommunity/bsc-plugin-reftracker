@@ -10,7 +10,7 @@ sub init()
         m.mainLabel
     ]
 
-    promises.chain(reftracker.findNodeById("bob")).then(function(result, node)
-        print "found node"
+    reftracker.promises.chain(reftracker.findNodeRefsById("mainLabel")).then(function(result, node)
+        print result
     end function)
 end sub

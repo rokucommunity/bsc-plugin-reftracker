@@ -83,6 +83,6 @@
   "dependencies": {
     "fast-glob": "^3.3.2",
     "fs-extra": "^11.2.0",
-    "promises": "npm:@rokucommunity/promises@0.3.0"
+    "reftracker_promises": "npm:@rokucommunity/promises@0.3.0"
   }
 }
