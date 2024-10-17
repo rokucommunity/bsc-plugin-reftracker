@@ -38,7 +38,7 @@ function discover(_ = invalid)
 end function
 
 function printNodes()
-    print FormatJson(m.keypathsByNodeReftrackerId)
+    print m.nodesByKeypath
 end function
 
 'Register a reference to a node so we can process it later. This
@@ -84,13 +84,15 @@ function processNodes()
 
     'if this node supports reftracker functionality, process the node's internal `m`
     return promises.chain(promises.resolve(true), queueItem).then(function(result, queueItem as NodeQueueItem)
-        if (queueItem.node as dynamic).reftrackerEnabled then
-            reftracker.internal.writeLog("processing node's internal m properties", queueItem.keypath, queueItem.node.subtype())
-            return queueItem.node@.reftracker_internal_execute({
-                command: "discover",
-                reftracker: m.top,
-                keypath: queueItem.keypath
-            })
+        reftracker.internal.writeLog("processing node's internal m properties", queueItem.keypath, queueItem.node.subtype())
+        promise = queueItem.node@.reftracker_internal_execute({
+            command: "discover",
+            reftracker: m.top,
+            keypath: queueItem.keypath
+        })
+
+        if promise <> invalid then
+            return promise
         else
             reftracker.internal.writeLog("node does not support reftracker intraspection", queueItem.keypath, queueItem.node.subtype())
         end if
@@ -101,7 +103,7 @@ function processNodes()
         children = queueItem.node.getChildren(-1, 0) as roSGNode[]
         reftracker.internal.writeLog(`registering ${children.count()} children of node`, queueItem.keypath, queueItem.node.subtype())
         for i = 0 to children.Count() - 1
-            registerNodeRef(queueItem.keypath, i.ToStr(), children[i])
+            registerNodeRef(queueItem.keypath, `getChild(${i})`, children[i])
         end for
 
         'register work items for each field on the node

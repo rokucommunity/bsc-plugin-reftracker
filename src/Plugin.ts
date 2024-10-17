@@ -65,18 +65,6 @@ export class Plugin implements CompilerPlugin {
 				]
 			)
 		);
-		//add a new interface field indicating this function is available
-		editor.arrayPush(
-			file.ast.component!.api.fields,
-			new SGField(
-				{ text: 'field', range: util.createRange(0, 0, 0, 99) },
-				[
-					createSGAttribute('id', 'reftrackerEnabled'),
-					createSGAttribute('type', 'boolean'),
-					createSGAttribute('value', 'true')
-				]
-			)
-		);
 
 		//inject the script
 		editor.arrayPush(

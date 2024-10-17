@@ -82,7 +82,7 @@ namespace reftracker.internal
                 'if this is a node, push register it with the reftracker to be processed later
                 if itemType = "roSGNode"
                     writeLog("item is a node. pushing to node queue", itemKeypath, itemType)
-                    options.reftracker@.registerNodeRef(item)
+                    options.reftracker@.registerNodeRef(options.keypath, workItem.key, item)
                 else if itemType = "roArray"
                     if isProcessed(item)
                         writeLog("item is an array and already processed. Skipping", itemKeypath, itemType)
@@ -248,6 +248,7 @@ namespace reftracker.internal
 
     interface WorkQueueItem
         keypath as string
+        key as string
         item as dynamic
     end interface
 
