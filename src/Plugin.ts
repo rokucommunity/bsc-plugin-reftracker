@@ -23,7 +23,7 @@ export class Plugin implements CompilerPlugin {
 		program.options.files.push(...files);
 
 		for (const file of files) {
-			program.setFile(file, fsExtra.readFileSync(s`${cwd}/lib/${file}`).toString());
+			program.setFile(file, fsExtra.readFileSync(file.src).toString());
 		}
 	}
 

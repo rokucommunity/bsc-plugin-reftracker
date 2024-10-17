@@ -1,11 +1,12 @@
 import "pkg:/source/roku_modules/promises/promises.brs"
 
-'typecast m as mm
+' typecast m as mm
 
 interface mm
-    reftrackers as roSGNodeReftracker[]
-    processedItems as roAssociativeArray
-    __deviceInfo as roDeviceInfo
+    ___reftracker_reftrackers as roSGNodeReftracker[]
+    ___reftracker_processedItems as roAssociativeArray
+    ___reftracker_deviceInfo as roDeviceInfo
+    ___reftracker_workQueue as roArray
 end interface
 
 
@@ -29,123 +30,186 @@ namespace reftracker.internal
     '@param {ExecuteOptions} options
     function execute(options)
         if options.command = "discover"
-            registerWorkItem(options.reftracker, options.keypath + ".m", m)
-            return processWorkItems(options.reftracker)
+            registerWorkItem(options.keypath, "m", m)
+            return processWorkItems(options)
+        else
+            return promises.reject({
+                message: "Unknown command"
+            })
         end if
     end function
 
-    function getWorkQueue(tracker as roSGNodeReftracker) as WorkQueueItem[]
-        key = `__workQueue_${tracker.id}`
-        if m[key] = invalid
-            m[key] = []
+    function getWorkQueue() as WorkQueueItem[]
+        if m.___reftracker_workQueue = invalid
+            m.___reftracker_workQueue = []
         end if
-        return m[key]
+        return m.___reftracker_workQueue
     end function
 
     ' register some item to be processed later
-    function registerWorkItem(tracker as roSGNodeReftracker, keypath as string, item as dynamic)
+    function registerWorkItem(parentKeypath as string, key as string, item as dynamic) as void
+        if isReftrackerProperty(key)
+            writeLog("skipping reftracker property", `${parentKeypath}.${key}`, type(item))
+            return
+        end if
+
         if item <> invalid
-            workQueue = getWorkQueue(tracker)
+            workQueue = getWorkQueue()
 
             workQueue.push({
-                keypath: keypath
+                keypath: `${parentKeypath}.${key}`,
+                key: key,
                 item: item
             })
         end if
     end function
 
-    function processWorkItems(tracker as roSGNodeReftracker) as roSGNodepromises_Promise
+    function processWorkItems(options as reftracker.internal.ProcessOptions) as roSGNodepromises_Promise
         startTime = createObject("roTimeSpan")
 
-        workQueue = getWorkQueue(tracker)
+        workQueue = getWorkQueue()
 
         'if we have work, and we've been running for less than 500ms, process another item
         while workQueue[0] <> invalid and startTime.TotalMilliseconds() < 500
-            item = workQueue.Shift()
+            workItem = workQueue.Shift()
+
+            item = workItem.item
+            itemKeypath = workItem.keypath
 
             itemType = type(item)
 
-            print `reftracker: processing item ${item.keypath} (${itemType}`
+            writeLog("processing item", itemKeypath, itemType)
 
             'if this is a node, push register it with the reftracker to be processed later
             if itemType = "roSGNode"
-                tracker@.registerNodeRef(item)
-            else if itemType = "roArray" and not isProcessed(item)
-                'if this is an array, register each item in the array
-                for i = 0 to (item as ifArray).Count() - 1
-                    registerWorkItem(tracker, `${item.keypath}.${i}`, item[i])
-                end for
-            else if itemType = "roAssociativeArray" and not isProcessed(item)
-                'if this is an associative array, register each item in the array
-                for each key in item
-                    registerWorkItem(tracker, `${item.keypath}.${key}`, item[key])
-                end for
+                writeLog("item is a node. pushing to node queue", itemKeypath, itemType)
+                options.reftracker@.registerNodeRef(item)
+            else if itemType = "roArray"
+                if isProcessed(item)
+                    writeLog("item is an array and already processed. Skipping", itemKeypath, itemType)
+                else
+                    markProcessed(item)
+                    writeLog("item is an array. registering all entries", itemKeypath, itemType)
+                    'if this is an array, register each item in the array
+                    for i = 0 to (item as ifArray).Count() - 1
+                        value = item[i]
+                        'if we encountered the reftracker property, we can stop processing the rest of this array (because it ends with [___reftracker_id, "<the-id>"])
+                        if isReftrackerProperty(value)
+                            exit for
+                        end if
+                        registerWorkItem(itemKeypath, i.ToStr(), item[i])
+                    end for
+                end if
+            else if itemType = "roAssociativeArray"
+                if isProcessed(item)
+                    writeLog("item is an AA and already processed. skipping", itemKeypath, itemType)
+                else
+
+                    markProcessed(item)
+                    writeLog("item is an AA. registering all properties", itemKeypath, itemType)
+                    'if this is an associative array, register each item in the array
+                    for each key in item
+                        value = item[key]
+                        registerWorkItem(itemKeypath, key, item[key])
+                    end for
+                end if
             else
                 'all other data types can be ignored, since they don't include references to other nodes
+                writeLog("skipping item because it does not support storing node references", itemKeypath, itemType)
             end if
         end while
 
         'we have no more work, return a resolved promise
         if workQueue[0] = invalid
+            writeLog("work queue is complete", options.keypath)
+            'TODO clean up
             return promises.resolve(true)
         end if
 
         'small delay, then process work again
-        return promises.chain(reftracker.internal.delay(.01)).then(function(result, tracker)
+        return promises.chain(reftracker.internal.delay(.01), options).then(function(result, options)
             'process work items again
-            return processWorkItems(tracker)
-        end function, tracker).toPromise()
+            return processWorkItems(options)
+        end function).toPromise()
     end function
 
+    'check if an item has already been processed
     function isProcessed(item as dynamic)
+        return false
+        if m.___reftracker_processedItems = invalid
+            m.___reftracker_processedItems = {}
+        end if
+
         id = getReftrackerId(item)
         'if we've processed this item, it'll have its id in the processedItems array
-        return m.processedItems[id] = invalid
+        return m.___reftracker_processedItems[id] = true
+    end function
+
+    'mark an item as processed so we know to skip it in the future
+    function markProcessed(item as dynamic) as void
+        return
+        if m.___reftracker_processedItems = invalid
+            m.___reftracker_processedItems = {}
+        end if
+
+        id = getReftrackerId(item)
+        'if we've processed this item, it'll have its id in the processedItems array
+        m.___reftracker_processedItems[id] = true
     end function
 
     'Ensure this node has a unique reftracker id so we can use it for lookups and equality checks
-    function getReftrackerId(item as dynamic)
+    function getReftrackerId(item as dynamic) as string
         reftrackerId = reftracker.internal.getRandomUUID()
-        key = "reftracker_id"
+        key = "___reftracker_id"
         itemType = type(item)
-        if itemType = "roSGNode" and item[key] = invalid then
-            item.addField(key, "string", false)
-            item[key] = reftrackerId
-        else if itemType = "roAssociativeArray" and item[key] = invalid
-            item[key] = reftrackerId
-        else if itemType = "roArray" and item[(item as roArray).Count() - 2] <> "reftracker_id"
-            item.push("reftracker_id")
-            item.push(reftrackerId)
-        else
-            return invalid
+        if itemType = "roSGNode"
+            if item[key] = invalid then
+                item.addField(key, "string", false)
+                item[key] = reftrackerId
+            end if
+            return item[key]
+        else if itemType = "roAssociativeArray"
+            if item[key] = invalid then
+                item[key] = reftrackerId
+            end if
+            return item[key]
+        else if itemType = "roArray"
+            nextToLastArrayValue = item[(item as roArray).Count() - 2]
+            if not isString(nextToLastArrayValue) or (isString(nextToLastArrayValue) and nextToLastArrayValue <> key)
+                item.push(key)
+                item.push(reftrackerId)
+            end if
+            return item[(item as roArray).Count() - 1]
         end if
-
-        return reftrackerId
+        'return invalid, which will probably crash outside (that's desired to identify issues)
+        return invalid
     end function
 
     function registerReftracker(finder as roSGNodeRefTracker)
-        if m.reftrackers = invalid
-            m.reftrackers = []
+        if m.___reftracker_reftrackers = invalid
+            m.___reftracker_reftrackers = []
         end if
-        m.reftrackers.push(finder)
+        m.___reftracker_reftrackers.push(finder)
     end function
 
     function getDeviceObject() as object
-        if m.__deviceInfo <> invalid then return m.__deviceInfo
-        m.__deviceInfo = createObject("roDeviceInfo")
-        return m.__deviceInfo
+        if m.___reftracker_deviceInfo <> invalid then return m.___reftracker_deviceInfo
+        m.___reftracker_deviceInfo = createObject("roDeviceInfo")
+        return m.___reftracker_deviceInfo
     end function
 
     ' Get a promise that resolves after a given duration
-    sub delay(duration = 0.0001 as float)
+    sub delay(duration = 0.0001 as float) as roSGNodepromises_Promise
         timer = createObject("roSGNode", "Timer")
         timer.duration = duration
         timer.repeat = false
-        timer.id = "__delay_" + getRandomUUID()
+        timer.id = "___reftracker_delay_" + getRandomUUID()
+
+        promise = promises.create()
 
         m[timer.id] = {
             timer: timer
-            promise: promises.create()
+            promise: promise
         }
 
         timer.observeFieldScoped("fire", (sub(event as object)
@@ -153,11 +217,12 @@ namespace reftracker.internal
             options = m[delayId]
             promise = options.promise
             promises.resolve(promise, invalid)
-            m[delayId].unobserveFieldScoped("fire")
+            m[delayId].timer.unobserveFieldScoped("fire")
             m.delete(delayId)
         end sub).toStr().mid(10))
 
         timer.control = "start"
+        return promise
     end sub
 
     function getRandomUUID()
@@ -174,8 +239,34 @@ namespace reftracker.internal
         reftracker as roSGNodeReftracker
     end interface
 
+    interface ProcessOptions
+        reftracker as roSGNodeReftracker
+        keypath as string
+    end interface
+
     interface WorkQueueItem
         keypath as string
         item as dynamic
     end interface
+
+    'All reftracker properties are prefixed with ___reftracker_ , so this method can be used to filter them out
+    function isReftrackerProperty(key as dynamic)
+        return isString(key) and key.left(14) = "___reftracker_"
+    end function
+
+    function writeLog(message as string, keypath = "" as string, typeInfo = "" as string)
+        text = `[reftracker]`
+        if keypath <> ""
+            text += `[${keypath}]`
+        end if
+        text += ` ${message}`
+        if typeInfo <> ""
+            text += ` (${typeInfo})`
+        end if
+        print text
+    end function
+
+	function isString(value as dynamic) as boolean
+		return type(value) = "String" or type(value) = "roString"
+	end function
 end namespace

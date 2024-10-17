@@ -9,7 +9,7 @@
   "typings": "dist/index.d.ts",
   "scripts": {
     "build": "rimraf out && tsc",
-    "build-test-project": "cd test-project && npx bsc",
+    "build-test-app": "cd test-app && npx bsc",
     "lint": "eslint \"src/**\"",
     "preversion": "npm run build && npm run lint && npm run test",
     "test": "nyc mocha",

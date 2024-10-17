@@ -13,7 +13,7 @@
 		{
 			"label": "build-test-app",
 			"type": "shell",
-			"command": "cd test-project && npx bsc",
+			"command": "cd test-app && npx bsc",
 			"group": {
 				"kind": "test",
 				"isDefault": true

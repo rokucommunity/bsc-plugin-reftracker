@@ -24,7 +24,7 @@
             ]
         },
         {
-            "name": "Debug test-project",
+            "name": "Debug test app",
             "type": "brightscript",
             "request": "launch",
             "rootDir": "${workspaceFolder}/out/dist",
