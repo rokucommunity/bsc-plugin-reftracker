@@ -38,26 +38,22 @@ function discover(_ = invalid)
     end function)
 end function
 
-interface GetNodesByIdOptions
-    id as string
-end interface
-
 '@public
-function getNodesById(options as GetNodesByIdOptions)
+function findNodeRefsById(options as reftracker.FindNodeRefsByIdOptions)
     id = options.id
     results = []
-    ' for each node in m.allNodes
-    '     if node.id <> id
-    '         continue for
-    '     end if
-    '     reftrackerId = reftracker.internal.getReftrackerId(node)
-    '     'build a list of keypaths for this node
-    '     results.push({
-    '         id: id,
-    '         node: node,
-    '         keypaths: m.keypathsByNodeReftrackerId[reftrackerId],
-    '     })
-    ' end for
+    for each node in m.allNodes
+        if node.id <> id
+            continue for
+        end if
+        reftrackerId = reftracker.internal.getReftrackerId(node)
+        'build a list of keypaths for this node
+        results.push({
+            id: id,
+            node: node,
+            keypaths: m.keypathsByNodeReftrackerId[reftrackerId],
+        })
+    end for
     return results
 end function
 

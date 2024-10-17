@@ -2,6 +2,7 @@
     <interface>
         <function name="discover" />
         <function name="registerNodeRef" />
+        <function name="findNodeRefsById" />
         <field id="runId" type="string" />
     </interface>
     <script type="text/brightscript" uri="pkg:/components/Reftracker.bs" /> <!-- bs:disable-line -->

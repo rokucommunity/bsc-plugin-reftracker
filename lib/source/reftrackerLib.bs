@@ -13,9 +13,13 @@ end interface
 
 namespace reftracker
 
+    interface FindNodeRefsByIdOptions
+        id as string
+    end interface
+
     ' Find all references to a SceneGraph node by its ID. Since multiple nodes can have the same ID, this function returns an array of results,
     ' where each entry includes all results for a specific node having that ID
-    function findNodeRefsById(id as string)
+    function findNodeRefsById(options as reftracker.FindNodeRefsByIdOptions)
         'build the reftracker
         tracker = createObject("roSGNode", "Reftracker")
         'store a reference to it so it doesn't get lost
@@ -24,10 +28,16 @@ namespace reftracker
         'run it
         discoverPromise = tracker@.discover()
 
-        return reftracker.promises.onThen(discoverPromise, function(result, tracker)
+        return reftracker.promises.onThen(discoverPromise, function(result, options)
             'return all nodes with the given id
-            return tracker@.findNodeRefsById(id)
-        end function, tracker)
+            result = options.tracker@.findNodeRefsById({
+                id: options.id
+            })
+            return result
+        end function, {
+            tracker: tracker,
+            id: options.id
+        })
     end function
 end namespace
 
