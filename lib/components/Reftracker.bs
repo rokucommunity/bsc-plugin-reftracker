@@ -67,6 +67,8 @@ function processNextNode()
 
     nodeQueueItem = m.nodeQueue.pop()
 
+    print `reftracker: processing node ${nodeQueueItem.keypath}<${nodeQueueItem.node.subtype()}>`
+
     return promises.chain(promises.resolve(true), nodeQueueItem).then(function(result, queueItem as NodeQueueItem)
         'if this node supports reftracker functionality, process the node's internal `m`
         if (nodeQueueItem.node as dynamic).reftrackerEnabled then

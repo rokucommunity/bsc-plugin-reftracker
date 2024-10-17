@@ -1,7 +1,7 @@
 import * as fsExtra from 'fs-extra';
 import * as fastGlob from 'fast-glob';
-import type { BeforeFileTranspileEvent, CompilerPlugin, Editor, Program, XmlFile } from 'brighterscript';
-import { createSGAttribute, isBrsFile, isXmlFile, standardizePath as s } from 'brighterscript';
+import type { BeforeFileTranspileEvent, BscFile, CompilerPlugin, Editor, Program, XmlFile } from 'brighterscript';
+import { AstEditor, createSGAttribute, isBrsFile, isXmlFile, standardizePath as s } from 'brighterscript';
 import { SGField, SGFunction, SGInterface, SGScript } from 'brighterscript/dist/parser/SGTypes';
 const cwd = s`${__dirname}/../`;
 
@@ -22,14 +22,21 @@ export class Plugin implements CompilerPlugin {
 		}
 	}
 
-	beforeFileTranspile(event: BeforeFileTranspileEvent) {
-		if (isBrsFile(event.file)) {
-
-		} else if (isXmlFile(event.file)) {
+	afterFileParse(file: BscFile) {
+		if (isXmlFile(file)) {
 			//inject the reftracker.bs file as a reference
-			this.injectScriptAndCallfunc(event.file, event.editor);
+			this.injectScriptAndCallfunc(file, new AstEditor());
 		}
 	}
+
+	// beforeFileTranspile(event: BeforeFileTranspileEvent) {
+	// 	if (isBrsFile(event.file)) {
+
+	// 	} else if (isXmlFile(event.file)) {
+	// 		//inject the reftracker.bs file as a reference
+	// 		this.injectScriptAndCallfunc(event.file, event.editor);
+	// 	}
+	// }
 
 	private injectScriptAndCallfunc(file: XmlFile, editor: Editor) {
 		//inject the script tag

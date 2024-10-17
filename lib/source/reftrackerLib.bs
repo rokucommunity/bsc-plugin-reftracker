@@ -65,6 +65,8 @@ namespace reftracker.internal
 
             itemType = type(item)
 
+            print `reftracker: processing item ${item.keypath} (${itemType}`
+
             'if this is a node, push register it with the reftracker to be processed later
             if itemType = "roSGNode"
                 tracker@.registerNodeRef(item)

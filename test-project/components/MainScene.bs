@@ -3,6 +3,8 @@ sub init()
     m.mainLabel = m.top.findNode("mainLabel")
     'change the color
     m.mainLabel.color = "0xFFFFFF"
-    'make the text really big 
+    'make the text really big
     m.mainLabel.font.size = 100
+
+    reftracker.findNodeById("bob")
 end sub
