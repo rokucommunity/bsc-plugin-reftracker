@@ -27,6 +27,8 @@ end function
 
 '@public
 function discover(_ = invalid)
+    m.discoverTimer = createObject("roTimeSpan")
+    m.discoverTimer.mark()
     'seed the list of nodes with all roots (should be a good starting point)
     for each root in m.top.getRoots() as roSGnode[]
         registerNodeRef(`<${root.subtype()}>`, "", root)
@@ -34,6 +36,7 @@ function discover(_ = invalid)
 
     'process the nodes one-by-one
     return reftracker.promises.onThen(processNodes(), function(result)
+        reftracker.internal.writeLog(`Reftracker.discover() took ${m.discoverTimer.TotalMilliseconds() / 1000} seconds` )
         printNodes()
     end function)
 end function
