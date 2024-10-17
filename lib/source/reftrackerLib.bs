@@ -1,0 +1,173 @@
+import "pkg:/source/roku_modules/promises/promises.brs"
+
+'typecast m as mm
+
+interface mm
+    reftrackers as roSGNodeReftracker[]
+    processedItems as roAssociativeArray
+    __deviceInfo as roDeviceInfo
+end interface
+
+
+namespace reftracker
+
+    ' Find all references to a SceneGraph node by its ID
+    function findNodeById(id as string)
+        'build the reftracker
+        tracker = createObject("roSGNode", "Reftracker")
+        'store a reference to it so it doesn't get lost
+        reftracker.internal.registerReftracker(tracker)
+        'run it
+        tracker@.discover()
+    end function
+end namespace
+
+
+namespace reftracker.internal
+
+    ' This is a generic function injected into every component as a callfunc, to be a single point of contact for all commands.
+    '@param {ExecuteOptions} options
+    function execute(options)
+        if options.command = "discover"
+            registerWorkItem(options.reftracker, options.keypath + ".m", m)
+            return processWorkItems(options.reftracker)
+        end if
+    end function
+
+    function getWorkQueue(tracker as roSGNodeReftracker) as WorkQueueItem[]
+        key = `__workQueue_${tracker.id}`
+        if m[key] = invalid
+            m[key] = []
+        end if
+        return m[key]
+    end function
+
+    ' register some item to be processed later
+    function registerWorkItem(tracker as roSGNodeReftracker, keypath as string, item as dynamic)
+        if item <> invalid
+            workQueue = getWorkQueue(tracker)
+
+            workQueue.push({
+                keypath: keypath
+                item: item
+            })
+        end if
+    end function
+
+    function processWorkItems(tracker as roSGNodeReftracker) as roSGNodepromises_Promise
+        startTime = createObject("roTimeSpan")
+
+        workQueue = getWorkQueue(tracker)
+
+        'if we have work, and we've been running for less than 500ms, process another item
+        while workQueue[0] <> invalid and startTime.TotalMilliseconds() < 500
+            item = workQueue.Shift()
+
+            itemType = type(item)
+
+            'if this is a node, push register it with the reftracker to be processed later
+            if itemType = "roSGNode"
+                tracker@.registerNodeRef(item)
+            else if itemType = "roArray" and not isProcessed(item)
+                'if this is an array, register each item in the array
+                for i = 0 to (item as ifArray).Count() - 1
+                    registerWorkItem(tracker, `${item.keypath}.${i}`, item[i])
+                end for
+            else if itemType = "roAssociativeArray" and not isProcessed(item)
+                'if this is an associative array, register each item in the array
+                for each key in item
+                    registerWorkItem(tracker, `${item.keypath}.${key}`, item[key])
+                end for
+            else
+                'all other data types can be ignored, since they don't include references to other nodes
+            end if
+        end while
+
+        'we have no more work, return a resolved promise
+        if workQueue[0] = invalid
+            return promises.resolve(true)
+        end if
+
+        'small delay, then process work again
+        return promises.chain(reftracker.internal.delay(.01)).then(function(result, tracker)
+            'process work items again
+            return processWorkItems(tracker)
+        end function, tracker).toPromise()
+    end function
+
+    function isProcessed(item as dynamic)
+        id = getReftrackerId(item)
+        'if we've processed this item, it'll have its id in the processedItems array
+        return m.processedItems[id] = invalid
+    end function
+
+    'Ensure this node has a unique reftracker id so we can use it for lookups and comparisons
+    function getReftrackerId(item as dynamic)
+        key = "reftracker_id"
+        itemType = type(item)
+        if itemType = "roSGNode" and item[key] = invalid then
+            item.addField(key, "string", reftracker.internal.getRandomUUID())
+        else if itemType = "roAssociativeArray" and item[key] = invalid
+            item[key] = reftracker.internal.getRandomUUID()
+        else if itemType = "roArray" and item[(item as roArray).Count() - 2] <> "reftracker_id"
+            item.push("reftracker_id")
+            item.push(reftracker.internal.getRandomUUID())
+        end if
+    end function
+
+    function registerReftracker(finder as roSGNodeRefTracker)
+        if m.reftrackers = invalid
+            m.reftrackers = []
+        end if
+        m.reftrackers.push(finder)
+    end function
+
+    function getDeviceObject() as object
+        if m.__deviceInfo <> invalid then return m.__deviceInfo
+        m.__deviceInfo = createObject("roDeviceInfo")
+        return m.__deviceInfo
+    end function
+
+    ' Get a promise that resolves after a given duration
+    sub delay(duration = 0.0001 as float)
+        timer = createObject("roSGNode", "Timer")
+        timer.duration = duration
+        timer.repeat = false
+        timer.id = "__delay_" + getRandomUUID()
+
+        m[timer.id] = {
+            timer: timer
+            promise: promises.create()
+        }
+
+        timer.observeFieldScoped("fire", (sub(event as object)
+            delayId = event.getNode()
+            options = m[delayId]
+            promise = options.promise
+            promises.resolve(promise, invalid)
+            m[delayId].unobserveFieldScoped("fire")
+            m.delete(delayId)
+        end sub).toStr().mid(10))
+
+        timer.control = "start"
+    end sub
+
+    function getRandomUUID()
+        return getDeviceObject().getRandomUUID()
+    end function
+
+    function isNode(value as dynamic, subtype = "" as string)
+        return type(value) = "roSGNode" and (subType = "" or value.isSubtype(subType))
+    end function
+
+    interface ExecuteOptions
+        command as string
+        keypath as string
+        reftracker as roSGNodeReftracker
+    end interface
+
+    interface WorkQueueItem
+        keypath as string
+        item as dynamic
+    end interface
+end namespace

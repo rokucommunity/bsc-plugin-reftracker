@@ -7,8 +7,7 @@
         "**/.DS_Store": true,
         "**/node_modules": true,
         "**/.nyc_output": true,
-        "**/coverage": true,
-        "**/dist": true
+        "**/coverage": true
     },
     "search.exclude": {
         "**/node_modules": true,
@@ -20,5 +19,6 @@
     "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
     "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
     "files.trimTrailingWhitespace": true,
-    "typescript.tsdk": "node_modules\\typescript\\lib"
+    "typescript.tsdk": "node_modules\\typescript\\lib",
+    "brightscript.bsdk": "1.0.0-alpha.39"
 }

@@ -1,0 +1,94 @@
+import "pkg:/source/roku_modules/promises/promises.brs"
+import "pkg:/source/reftrackerLib.bs"
+
+' typecast m as ReftrackerM
+interface ReftrackerM
+    nodesByKeypath as ifAssociativeArray
+    keypathsByNodeReftrackerId as ifAssociativeArray
+    allNodes as roSGNode[]
+    nodeQueue as NodeQueueItem[]
+    top as roSGNodeReftracker
+end interface
+
+function init()
+    'build several parallel lookups for nodes to simplify discoverability later
+
+    ' a lookup of nodes by their keypath
+    m.nodesByKeypath = {}
+    'a lookup of all keypaths for a node indexed by the node's reftrackerId
+    m.keypathsByNodeReftrackerId = {}
+    'a flat list of all nodes discovered in this run
+    m.allNodes = []
+
+    m.top.runId = reftracker.internal.getRandomUUID()
+end function
+
+function discover()
+    'seed the list of nodes with all roots (should be a good starting point)
+    for each root in m.top.getRoots() as roSGnode[]
+        registerNodeRef(`root:<${root.subtype()}>`, root)
+    end for
+
+    'process the nodes one-by-one
+    promises.onThen(processNextNode(), function(result)
+        print "done processing nodes"
+    end function)
+end function
+
+'Register a reference to a node so we can process it later. This
+function registerNodeRef(keypath as string, node as roSGNode)
+    reftrackerId = reftracker.internal.getReftrackerId(node)
+
+    'store a reference to the node by its keypath
+    m.nodesByKeypath[keypath] = node
+
+    isNewNode = m.keypathsByNodeReftrackerId[reftrackerId] = invalid
+
+    if isNewNode
+        'build a new array to store all the keypaths for this node
+        m.keypathsByNodeReftrackerId[reftrackerId] = []
+        'if this is the first time we've seen this node, store it in our list of all nodes
+        m.allNodes.push(node)
+
+        'register this node for future evaluation
+        m.nodeQueue.push({
+            keypath: keypath,
+            node: node
+        })
+    end if
+    m.keypathsByNodeReftrackerId[reftrackerId].push(keypath)
+end function
+
+function processNextNode()
+    'if we have no more nodes, we are done!
+    if m.nodeQueue.count() = 0
+        return promises.resolve(invalid)
+    end if
+
+    nodeQueueItem = m.nodeQueue.pop()
+
+    return promises.chain(promises.resolve(true), nodeQueueItem).then(function(result, queueItem as NodeQueueItem)
+        'if this node supports reftracker functionality, process the node's internal `m`
+        if (nodeQueueItem.node as dynamic).reftrackerEnabled then
+            return nodeQueueItem.node@.reftracker_internal_execute({ command: "discover", reftracker: m.top })
+        end if
+    end function).then(function(result, nodeQueueItem as NodeQueueItem)
+        'add all public fields to a list of stuff to work on
+        for each field in nodeQueueItem.node.getFields()
+            value = nodeQueueItem.node[field]
+            reftracker.internal.registerWorkItem(m.top, `${nodeQueueItem.keypath}.${field}`, value)
+        end for
+
+        'now process this data (it will run async and process in chunks until all are finished)
+        return reftracker.internal.processWorkItems(m.top)
+
+    end function).then(function(result, nodeQueueItem as NodeQueueItem)
+
+        return processNextNode()
+    end function).toPromise()
+end function
+
+interface NodeQueueItem
+    keypath as string
+    node as roSGNode
+end interface

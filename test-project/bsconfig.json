@@ -1,0 +1,19 @@
+{
+    "createPackage": false,
+    "stagingDir": "../out/dist",
+    "retainStagingDir": true,
+    "autoImportComponentScript": true,
+    "sourceMap": true,
+    "files": [
+        "manifest",
+        "source/**/*.*",
+        "components/**/*.*",
+        "images/**/*.*"
+    ],
+    "plugins": [
+        "../src/index.ts"
+    ],
+    "require": [
+        "ts-node/register"
+    ]
+}

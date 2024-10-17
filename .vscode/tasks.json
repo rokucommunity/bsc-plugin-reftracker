@@ -9,6 +9,15 @@
 				"kind": "test",
 				"isDefault": true
 			}
+		},
+		{
+			"label": "build-test-app",
+			"type": "shell",
+			"command": "cd test-project && npx bsc",
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			}
 		}
 	]
 }
