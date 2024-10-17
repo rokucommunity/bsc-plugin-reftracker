@@ -71,52 +71,54 @@ namespace reftracker.internal
 
         'if we have work, and we've been running for less than 500ms, process another item
         while workQueue[0] <> invalid and startTime.TotalMilliseconds() < 500
-            workItem = workQueue.Shift()
+            try
+                workItem = workQueue.Shift()
 
-            item = workItem.item
-            itemKeypath = workItem.keypath
+                item = workItem.item
+                itemKeypath = workItem.keypath
 
-            itemType = type(item)
+                itemType = type(item)
 
-            writeLog("processing item", itemKeypath, itemType)
+                'if this is a node, push register it with the reftracker to be processed later
+                if itemType = "roSGNode"
+                    writeLog("item is a node. pushing to node queue", itemKeypath, itemType)
+                    options.reftracker@.registerNodeRef(item)
+                else if itemType = "roArray"
+                    if isProcessed(item)
+                        writeLog("item is an array and already processed. Skipping", itemKeypath, itemType)
+                    else
+                        markProcessed(item)
+                        writeLog("item is an array. registering all entries", itemKeypath, itemType)
+                        'if this is an array, register each item in the array
+                        for i = 0 to (item as ifArray).Count() - 1
+                            value = item[i]
+                            'if we encountered the reftracker property, we can stop processing the rest of this array (because it ends with [___reftracker_id, "<the-id>"])
+                            if isReftrackerProperty(value)
+                                exit for
+                            end if
+                            registerWorkItem(itemKeypath, i.ToStr(), item[i])
+                        end for
+                    end if
+                else if itemType = "roAssociativeArray"
+                    if isProcessed(item)
+                        writeLog("item is an AA and already processed. skipping", itemKeypath, itemType)
+                    else
 
-            'if this is a node, push register it with the reftracker to be processed later
-            if itemType = "roSGNode"
-                writeLog("item is a node. pushing to node queue", itemKeypath, itemType)
-                options.reftracker@.registerNodeRef(item)
-            else if itemType = "roArray"
-                if isProcessed(item)
-                    writeLog("item is an array and already processed. Skipping", itemKeypath, itemType)
+                        markProcessed(item)
+                        writeLog("item is an AA. registering all properties", itemKeypath, itemType)
+                        'if this is an associative array, register each item in the array
+                        for each key in item
+                            value = item[key]
+                            registerWorkItem(itemKeypath, key, item[key])
+                        end for
+                    end if
                 else
-                    markProcessed(item)
-                    writeLog("item is an array. registering all entries", itemKeypath, itemType)
-                    'if this is an array, register each item in the array
-                    for i = 0 to (item as ifArray).Count() - 1
-                        value = item[i]
-                        'if we encountered the reftracker property, we can stop processing the rest of this array (because it ends with [___reftracker_id, "<the-id>"])
-                        if isReftrackerProperty(value)
-                            exit for
-                        end if
-                        registerWorkItem(itemKeypath, i.ToStr(), item[i])
-                    end for
+                    'all other data types can be ignored, since they don't include references to other nodes
+                    writeLog("skipping item because it does not support storing node references", itemKeypath, itemType)
                 end if
-            else if itemType = "roAssociativeArray"
-                if isProcessed(item)
-                    writeLog("item is an AA and already processed. skipping", itemKeypath, itemType)
-                else
-
-                    markProcessed(item)
-                    writeLog("item is an AA. registering all properties", itemKeypath, itemType)
-                    'if this is an associative array, register each item in the array
-                    for each key in item
-                        value = item[key]
-                        registerWorkItem(itemKeypath, key, item[key])
-                    end for
-                end if
-            else
-                'all other data types can be ignored, since they don't include references to other nodes
-                writeLog("skipping item because it does not support storing node references", itemKeypath, itemType)
-            end if
+            catch e
+                writeLog(`Error processing work item: ${FormatJson(e)}`, workItem.keypath, "")
+            end try
         end while
 
         'we have no more work, return a resolved promise
@@ -255,10 +257,8 @@ namespace reftracker.internal
     end function
 
     function writeLog(message as string, keypath = "" as string, typeInfo = "" as string)
-        text = `[reftracker]`
-        if keypath <> ""
-            text += `[${keypath}]`
-        end if
+        keypath = `${keypath}`
+        text = keypath = "" ? "[ref]" : `[ref:${keypath}]`
         text += ` ${message}`
         if typeInfo <> ""
             text += ` (${typeInfo})`
@@ -266,7 +266,33 @@ namespace reftracker.internal
         print text
     end function
 
-	function isString(value as dynamic) as boolean
-		return type(value) = "String" or type(value) = "roString"
+    function isString(value as dynamic) as boolean
+        return type(value) = "String" or type(value) = "roString"
+    end function
+
+    function printError(error as dynamic)
+        if isNonEmptyAA(error) and isArray(error.backtrace) then
+            newItem = {}
+            newItem.append(error)
+            newBackTrace = chr(10)
+            for each backtrace in newItem.backtrace
+                newBackTrace += "        file/line: " + backtrace.fileName + `(${backtrace.line_number})` + chr(10)
+                newBackTrace += "        Function " + backtrace.function + chr(10) + chr(10)
+            end for
+            newBackTrace = newBackTrace.trim()
+            if newBackTrace <> "" then newBackTrace = chr(10) + "        " + newBackTrace
+            newItem.backtrace = newBackTrace
+            print newItem; " "
+        else
+            print error; " "
+        end if
+    end function
+
+    function isNonEmptyAA(value as dynamic) as boolean
+		return type(value) = "roAssociativeArray" and not value.isEmpty()
+	end function
+
+    function isArray(value as dynamic) as boolean
+		return type(value) = "roArray"
 	end function
 end namespace

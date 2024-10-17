@@ -28,7 +28,7 @@ end function
 function discover(_ = invalid)
     'seed the list of nodes with all roots (should be a good starting point)
     for each root in m.top.getRoots() as roSGnode[]
-        registerNodeRef(`root:<${root.subtype()}>`, root)
+        registerNodeRef(`<${root.subtype()}>`, "", root)
     end for
 
     'process the nodes one-by-one
@@ -42,8 +42,14 @@ function printNodes()
 end function
 
 'Register a reference to a node so we can process it later. This
-function registerNodeRef(keypath as string, node as roSGNode)
+function registerNodeRef(parentKeypath as string, key as string, node as roSGNode) as void
+    'skip this node if it's a reftracker property
+    if reftracker.internal.isReftrackerProperty(key)
+        return
+    end if
     reftrackerId = reftracker.internal.getReftrackerId(node)
+
+    keypath = key = "" ? parentKeypath : `${parentKeypath}.${key}`
 
     'store a reference to the node by its keypath
     m.nodesByKeypath[keypath] = node
@@ -91,24 +97,33 @@ function processNodes()
 
         'add all public fields to a list of stuff to work on
     end function).then(function(result, queueItem as NodeQueueItem)
+        'register the direct children of this node for future processing
+        children = queueItem.node.getChildren(-1, 0) as roSGNode[]
+        reftracker.internal.writeLog(`registering ${children.count()} children of node`, queueItem.keypath, queueItem.node.subtype())
+        for i = 0 to children.Count() - 1
+            registerNodeRef(queueItem.keypath, i.ToStr(), children[i])
+        end for
+
+        'register work items for each field on the node
         reftracker.internal.writeLog("processing node fields", queueItem.keypath, queueItem.node.subtype())
         for each fieldName in queueItem.node.getFields()
             value = queueItem.node[fieldName]
             reftracker.internal.registerWorkItem(queueItem.keypath, fieldName, value)
         end for
 
-        'now process this data (it will run async and process in chunks until all are finished)
+        'process all the work items (it will run async and process in chunks until all are finished)
         return reftracker.internal.processWorkItems({
             reftracker: m.top,
             keypath: queueItem.keypath
         })
 
-        'now process the next node
+        'process the next node
     end function).then(function(result, queueItem as NodeQueueItem)
         reftracker.internal.writeLog("Processing next node")
         return processNodes()
-    end function).catch(function(error, _)
-        print FormatJson(error)
+    end function).catch(function(error, queueItem as NodeQueueItem)
+        reftracker.internal.writeLog(`Error processing node`, queueItem?.keypath)
+        reftracker.internal.printError(error)
     end function).toPromise()
 end function
 
