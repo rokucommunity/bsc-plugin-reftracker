@@ -18,7 +18,7 @@ namespace reftracker
         'store a reference to it so it doesn't get lost
         reftracker.internal.registerReftracker(tracker)
         'run it
-        tracker@.discover()
+        return tracker@.discover()
     end function
 end namespace
 
@@ -103,18 +103,24 @@ namespace reftracker.internal
         return m.processedItems[id] = invalid
     end function
 
-    'Ensure this node has a unique reftracker id so we can use it for lookups and comparisons
+    'Ensure this node has a unique reftracker id so we can use it for lookups and equality checks
     function getReftrackerId(item as dynamic)
+        reftrackerId = reftracker.internal.getRandomUUID()
         key = "reftracker_id"
         itemType = type(item)
         if itemType = "roSGNode" and item[key] = invalid then
-            item.addField(key, "string", reftracker.internal.getRandomUUID())
+            item.addField(key, "string", false)
+            item[key] = reftrackerId
         else if itemType = "roAssociativeArray" and item[key] = invalid
-            item[key] = reftracker.internal.getRandomUUID()
+            item[key] = reftrackerId
         else if itemType = "roArray" and item[(item as roArray).Count() - 2] <> "reftracker_id"
             item.push("reftracker_id")
-            item.push(reftracker.internal.getRandomUUID())
+            item.push(reftrackerId)
+        else
+            return invalid
         end if
+
+        return reftrackerId
     end function
 
     function registerReftracker(finder as roSGNodeRefTracker)

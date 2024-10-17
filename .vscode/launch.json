@@ -27,7 +27,6 @@
             "name": "Debug test-project",
             "type": "brightscript",
             "request": "launch",
-            "host": "${promptForHost}",
             "rootDir": "${workspaceFolder}/out/dist",
             "preLaunchTask": "build-test-app",
             "enableDebugProtocol": true

@@ -6,5 +6,7 @@ sub init()
     'make the text really big
     m.mainLabel.font.size = 100
 
-    reftracker.findNodeById("bob")
+    promises.chain(reftracker.findNodeById("bob")).then(function(result, node)
+        print "found node"
+    end function)
 end sub

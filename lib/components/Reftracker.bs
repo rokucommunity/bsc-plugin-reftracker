@@ -1,5 +1,5 @@
-import "pkg:/source/roku_modules/promises/promises.brs"
 import "pkg:/source/reftrackerLib.bs"
+import "pkg:/source/roku_modules/promises/promises.brs"
 
 ' typecast m as ReftrackerM
 interface ReftrackerM
@@ -19,18 +19,20 @@ function init()
     m.keypathsByNodeReftrackerId = {}
     'a flat list of all nodes discovered in this run
     m.allNodes = []
+    'a queue of nodes to process
+    m.nodeQueue = []
 
     m.top.runId = reftracker.internal.getRandomUUID()
 end function
 
-function discover()
+function discover(_ = invalid)
     'seed the list of nodes with all roots (should be a good starting point)
     for each root in m.top.getRoots() as roSGnode[]
         registerNodeRef(`root:<${root.subtype()}>`, root)
     end for
 
     'process the nodes one-by-one
-    promises.onThen(processNextNode(), function(result)
+    return promises.onThen(processNextNode(), function(result)
         print "done processing nodes"
     end function)
 end function

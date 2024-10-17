@@ -1,4 +1,5 @@
 {
+    "rootDir": "./",
     "createPackage": false,
     "stagingDir": "../out/dist",
     "retainStagingDir": true,
