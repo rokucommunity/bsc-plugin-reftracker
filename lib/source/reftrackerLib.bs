@@ -1,5 +1,6 @@
 import "pkg:/source/roku_modules/promises/promises.brs"
 
+const MAX_WORK_QUEUE_DURATION = 5000000000000
 ' typecast m as mm
 
 interface mm
@@ -57,6 +58,7 @@ namespace reftracker.internal
             workQueue = getWorkQueue()
 
             workQueue.push({
+                parentKeypath: parentKeypath,
                 keypath: `${parentKeypath}.${key}`,
                 key: key,
                 item: item
@@ -70,19 +72,19 @@ namespace reftracker.internal
         workQueue = getWorkQueue()
 
         'if we have work, and we've been running for less than 500ms, process another item
-        while workQueue[0] <> invalid and startTime.TotalMilliseconds() < 500
+        while workQueue[0] <> invalid and startTime.TotalMilliseconds() < MAX_WORK_QUEUE_DURATION
             try
                 workItem = workQueue.Shift()
 
                 item = workItem.item
-                itemKeypath = workItem.keypath
+                itemKeypath = `${workItem.parentKeypath}.${workItem.key}`
 
                 itemType = type(item)
 
                 'if this is a node, push register it with the reftracker to be processed later
                 if itemType = "roSGNode"
                     writeLog("item is a node. pushing to node queue", itemKeypath, itemType)
-                    options.reftracker@.registerNodeRef(options.keypath, workItem.key, item)
+                    options.reftracker@.registerNodeRef(workItem.parentKeypath, workItem.key, item)
                 else if itemType = "roArray"
                     if isProcessed(item)
                         writeLog("item is an array and already processed. Skipping", itemKeypath, itemType)
@@ -109,7 +111,7 @@ namespace reftracker.internal
                         'if this is an associative array, register each item in the array
                         for each key in item
                             value = item[key]
-                            registerWorkItem(itemKeypath, key, item[key])
+                            reftracker.internal.registerWorkItem(itemKeypath, key, item[key])
                         end for
                     end if
                 else
@@ -117,7 +119,7 @@ namespace reftracker.internal
                     writeLog("skipping item because it does not support storing node references", itemKeypath, itemType)
                 end if
             catch e
-                writeLog(`Error processing work item: ${FormatJson(e)}`, workItem.keypath, "")
+                writeLog(`Error processing work item: ${FormatJson(e)}`, itemKeypath, "")
             end try
         end while
 
@@ -247,7 +249,7 @@ namespace reftracker.internal
     end interface
 
     interface WorkQueueItem
-        keypath as string
+        parentKeypath as string
         key as string
         item as dynamic
     end interface
