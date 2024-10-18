@@ -1,6 +1,7 @@
 import "pkg:/source/roku_modules/reftracker_promises/promises.brs"
 
-const MAX_WORK_QUEUE_DURATION = 5000000000000
+' const MAX_WORK_QUEUE_DURATION = 5000000000000
+const MAX_WORK_QUEUE_DURATION = 500
 ' typecast m as mm
 
 interface mm
@@ -9,6 +10,12 @@ interface mm
     ___reftracker_deviceInfo as roDeviceInfo
     ___reftracker_workQueue as roArray
 end interface
+
+function test(outer = 1)
+    test2 = function(inner = 2)
+        print outer + inner
+    end function
+end function
 
 
 namespace reftracker
@@ -19,7 +26,9 @@ namespace reftracker
 
     ' Find all references to a SceneGraph node by its ID. Since multiple nodes can have the same ID, this function returns an array of results,
     ' where each entry includes all results for a specific node having that ID
-    function findNodeRefsById(options as reftracker.FindNodeRefsByIdOptions)
+    '
+    ' supports a callback and context to be passed in, but also returns a promise that can be observed
+    function findNodeRefsById(options as reftracker.FindNodeRefsByIdOptions, callback = invalid, context = "__INVALID__")
         'build the reftracker
         tracker = createObject("roSGNode", "Reftracker")
         'store a reference to it so it doesn't get lost
@@ -28,16 +37,28 @@ namespace reftracker
         'run it
         discoverPromise = tracker@.discover()
 
-        return reftracker.promises.onThen(discoverPromise, function(result, options)
-            'return all nodes with the given id
-            result = options.tracker@.findNodeRefsById({
+        return reftracker.promises.chain(discoverPromise, {
+            tracker: tracker,
+            id: options.id,
+            callback: callback,
+            context: context
+        }).then(function(result, options)
+            'find all nodes with the given id
+            return options.tracker@.findNodeRefsById({
                 id: options.id
             })
+        end function).then(function(result, options)
+            'if we have a callback, call it
+            callback = options.callback
+            if(reftracker.internal.isFunction(callback))
+                if options.context = "__INVALID__"
+                    callback(result)
+                else
+                    callback(result, options.context)
+                end if
+            end if
             return result
-        end function, {
-            tracker: tracker,
-            id: options.id
-        })
+        end function).ToPromise()
     end function
 end namespace
 
@@ -89,7 +110,11 @@ namespace reftracker.internal
         workQueue = getWorkQueue()
 
         'if we have work, and we've been running for less than 500ms, process another item
-        while workQueue[0] <> invalid and startTime.TotalMilliseconds() < MAX_WORK_QUEUE_DURATION
+        while workQueue[0] <> invalid
+            if startTime.TotalMilliseconds() >= MAX_WORK_QUEUE_DURATION
+                writeLog(`Work item timeout ${MAX_WORK_QUEUE_DURATION}ms reached. sleeping for a moment before continuing`)
+                exit while
+            end if
             try
                 workItem = workQueue.Shift()
 
@@ -142,15 +167,18 @@ namespace reftracker.internal
 
         'we have no more work, return a resolved promise
         if workQueue[0] = invalid
-            writeLog("work queue is complete", options.keypath)
             'TODO clean up
             return reftracker.promises.resolve(true)
         end if
 
         'small delay, then process work again
-        return reftracker.promises.chain(reftracker.internal.delay(.01), options).then(function(result, options)
+        return reftracker.promises.chain(reftracker.internal.delay(.001), options).then(function(result, options)
+            writeLog("Nexttick callback. Processing work items again")
             'process work items again
             return processWorkItems(options)
+        end function).catch(function(error, options)
+            print "error starting next work item"
+            reftracker.internal.printError(error)
         end function).toPromise()
     end function
 
@@ -237,7 +265,7 @@ namespace reftracker.internal
             delayId = event.getNode()
             options = m[delayId]
             promise = options.promise
-            reftracker.promises.resolve(promise, invalid)
+            reftracker.promises.resolve(invalid, promise)
             m[delayId].timer.unobserveFieldScoped("fire")
             m.delete(delayId)
         end sub).toStr().mid(10))
@@ -315,4 +343,9 @@ namespace reftracker.internal
     function isArray(value as dynamic) as boolean
         return type(value) = "roArray"
     end function
+
+    function isFunction(value as dynamic) as boolean
+        return type(value) = "roFunction" or type(value) = "Function"
+    end function
+
 end namespace

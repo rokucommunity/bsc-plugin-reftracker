@@ -37,7 +37,6 @@ function discover(_ = invalid)
     'process the nodes one-by-one
     return reftracker.promises.onThen(processNodes(), function(result)
         reftracker.internal.writeLog(`Reftracker.discover() took ${m.discoverTimer.TotalMilliseconds() / 1000} seconds` )
-        printNodes()
     end function)
 end function
 
@@ -60,9 +59,6 @@ function findNodeRefsById(options as reftracker.FindNodeRefsByIdOptions)
     return results
 end function
 
-function printNodes()
-    print m.nodesByKeypath
-end function
 
 'Register a reference to a node so we can process it later. This
 function registerNodeRef(parentKeypath as string, key as string, node as roSGNode) as void

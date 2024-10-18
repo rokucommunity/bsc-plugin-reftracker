@@ -9,10 +9,9 @@ sub init()
     m.arr = [
         m.mainLabel
     ]
-    promise = reftracker.findNodeRefsById({
+    reftracker.findNodeRefsById({
         id: "mainLabel"
-    })
-    reftracker.promises.chain(promise).then(function(result)
-        print result
+    }, function(result)
+        print "nodes for ID", FormatJson(result, &h0200)
     end function)
 end sub

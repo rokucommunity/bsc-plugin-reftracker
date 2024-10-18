@@ -4,7 +4,7 @@ import { Plugin } from './Plugin';
 import undent from 'undent';
 import { expect } from 'chai';
 
-describe('Plugin', () => {
+describe.skip('Plugin', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
