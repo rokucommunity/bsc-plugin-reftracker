@@ -18,23 +18,18 @@ describe('Plugin', () => {
             rootDir: rootDir,
             stagingDir: stagingDir
         });
-        program.plugins.add(new Plugin());
+        const plugin = new Plugin();
+        program.plugins.add(plugin);
+        //`afterProgramCreate` is only emitted by ProgramBuilder, not by Program, so a test that
+        //builds a bare Program has to invoke it directly to get the plugin's lib files loaded.
+        plugin.afterProgramCreate(program);
     });
 
     afterEach(() => {
         fsExtra.removeSync(tempDir);
     });
 
-    it('adds a leading print statement to every named function', async () => {
-        program.setFile('source/main.bs', `
-            sub main()
-                m.name = "main"
-            end sub
-
-            function temp()
-                m.name = "temp"
-            end function
-        `);
+    it('injects the callfunc interface and reftracker lib script into components', async () => {
         program.setFile('components/CustomButton.xml', `
             <component name="CustomButton" extends="Button">
                 <script type="text/brightscript" uri="CustomButton.brs" />
@@ -46,47 +41,70 @@ describe('Plugin', () => {
             end sub
         `);
 
-        //make sure there are no diagnostics
+        //the injected script and callfunc should resolve, so there should be no diagnostics
         program.validate();
         expect(
             program.getDiagnostics().map(x => x.message)
         ).to.eql([]);
 
-        //make sure the code transpiles properly
-        expect(
-            (await program.getTranspiledFileContents('source/main.bs')).code
-        ).to.eql(undent`
-            sub main()
-                print "hello from main"
-                m.name = "main"
-            end sub
-
-            function temp()
-                print "hello from temp"
-                m.name = "temp"
-            end function
-        `);
-
-
-
         expect(
             undent((await program.getTranspiledFileContents('components/CustomButton.xml')).code)
         ).to.eql(undent`
             <component name="CustomButton" extends="Button">
+                <interface>
+                    <function name="reftracker_internal_execute" />
+                </interface>
                 <script type="text/brightscript" uri="CustomButton.brs" />
+                <script type="text/brightscript" uri="pkg:/source/reftrackerLib.brs" />
+                <script type="text/brightscript" uri="pkg:/source/roku_modules/reftracker_promises/promises.brs" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
-                <children>
-                    <label text="Hello from CustomButton" />
-                </children>
             </component>
         `);
+    });
+
+    it('preserves an existing interface when injecting the callfunc', async () => {
+        program.setFile('components/HasInterface.xml', `
+            <component name="HasInterface" extends="Group">
+                <interface>
+                    <field id="caption" type="string" />
+                </interface>
+                <script type="text/brightscript" uri="HasInterface.brs" />
+            </component>
+        `);
+        program.setFile('components/HasInterface.brs', `
+            sub init()
+            end sub
+        `);
+
+        program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message)
+        ).to.eql([]);
+
+        const code = undent((await program.getTranspiledFileContents('components/HasInterface.xml')).code);
+        //the pre-existing field survives...
+        expect(code).to.include('<field id="caption" type="string" />');
+        //...alongside the injected callfunc function
+        expect(code).to.include('<function name="reftracker_internal_execute" />');
+    });
+
+    it('leaves brs files untouched', async () => {
+        program.setFile('source/main.bs', `
+            sub main()
+                m.name = "main"
+            end sub
+        `);
+
+        program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message)
+        ).to.eql([]);
 
         expect(
-            (await program.getTranspiledFileContents('components/CustomButton.brs')).code
+            (await program.getTranspiledFileContents('source/main.bs')).code
         ).to.eql(undent`
-            sub init()
-                print "hello from init"
-                m.name = "init"
+            sub main()
+                m.name = "main"
             end sub
         `);
     });

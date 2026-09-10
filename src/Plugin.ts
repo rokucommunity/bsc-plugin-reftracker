@@ -2,7 +2,7 @@ import * as fsExtra from 'fs-extra';
 import * as fastGlob from 'fast-glob';
 import type { BscFile, CompilerPlugin, Editor, Program, XmlFile } from 'brighterscript';
 import { AstEditor, createSGAttribute, isXmlFile, standardizePath as s, util } from 'brighterscript';
-import { SGField, SGFunction, SGInterface, SGScript } from 'brighterscript/dist/parser/SGTypes';
+import { SGFunction, SGInterface, SGScript } from 'brighterscript/dist/parser/SGTypes';
 const cwd = s`${__dirname}/../`;
 
 export class Plugin implements CompilerPlugin {

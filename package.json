@@ -13,7 +13,8 @@
     "lint": "eslint \"src/**\"",
     "preversion": "npm run build && npm run lint && npm run test",
     "test": "nyc mocha",
-    "watch": "rimraf out && tsc --watch"
+    "watch": "rimraf out && tsc --watch",
+    "postinstall": "ropm copy"
   },
   "author": "",
   "license": "MIT",
@@ -43,18 +44,6 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
     "undent": "^0.1.0"
-  },
-  "mocha": {
-    "spec": "src/**/*.spec.ts",
-    "require": [
-      "source-map-support/register",
-      "ts-node/register"
-    ],
-    "fullTrace": true,
-    "timeout": 2000,
-    "watchExtensions": [
-      "ts"
-    ]
   },
   "nyc": {
     "include": [
