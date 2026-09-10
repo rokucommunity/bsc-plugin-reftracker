@@ -13,7 +13,8 @@
     "lint": "eslint \"src/**\"",
     "preversion": "npm run build && npm run lint && npm run test",
     "test": "nyc mocha",
-    "watch": "rimraf out && tsc --watch"
+    "watch": "rimraf out && tsc --watch",
+    "postinstall": "ropm copy"
   },
   "author": "",
   "license": "MIT",
