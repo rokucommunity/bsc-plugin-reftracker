@@ -12,9 +12,9 @@
     "build-test-app": "cd test-app && npx bsc",
     "lint": "eslint \"src/**\"",
     "preversion": "npm run build && npm run lint && npm run test",
+    "pretest": "npx ropm copy",
     "test": "nyc mocha",
-    "watch": "rimraf out && tsc --watch",
-    "postinstall": "ropm copy"
+    "watch": "rimraf out && tsc --watch"
   },
   "author": "",
   "license": "MIT",
